@@ -3,21 +3,28 @@ package com.infinisystem.data
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 
-class UsageStatsRepository(private val context: Context) {
+class UsageStatsRepository(private val usageStatDao: UsageStatDao, private val context: Context) {
 
     private val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
-    fun getUsageStats(): Flow<Map<String, Long>> = flow {
+    fun getUsageStats(since: Long): Flow<List<UsageStatEntity>> {
+        return usageStatDao.getUsageStats(since)
+    }
+
+    suspend fun refreshUsageStats() {
         val time = System.currentTimeMillis()
+        // Query stats for the last 24 hours
         val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 1000 * 60 * 60 * 24, time)
-        val usageMap = mutableMapOf<String, Long>()
         stats?.forEach { 
             if (it.totalTimeInForeground > 0) {
-                usageMap[it.packageName] = it.totalTimeInForeground
+                val usageStat = UsageStatEntity(
+                    packageName = it.packageName,
+                    timestamp = it.lastTimeUsed,
+                    totalTimeInForeground = it.totalTimeInForeground
+                )
+                usageStatDao.insertUsageStat(usageStat)
             }
         }
-        emit(usageMap)
     }
 }
